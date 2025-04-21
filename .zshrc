@@ -1,4 +1,9 @@
-# .zshrc configuration for NetSuite developers
+# Welcome message with daily quote
+echo -e "\n🚀 \033[1;32mNetSuite Development Environment Loaded\033[0m"
+echo -e "Type 'ns-api-help' or 'ns-record-help' for quick references\n"
+echo -e "\033[1;35m📜 Your daily inspiration:\033[0m"
+daily_quote_cache
+echo -e "\n"# .zshrc configuration for NetSuite developers
 # ========================================
 # Installation steps:
 # 1. Install Oh My Zsh: sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
@@ -14,7 +19,7 @@
 # --------------------------
 export ZSH="$HOME/.oh-my-zsh"
 ZSH_THEME="robbyrussell"  # A clean, minimal theme that works well
-plugins=(git node npm nvm vscode docker)
+plugins=(git node npm nvm vscode)
 source $ZSH/oh-my-zsh.sh
 
 # Path Configuration
@@ -241,36 +246,104 @@ netsuite_account_info() {
 # Modify prompt to show NetSuite account when in a project directory
 export PROMPT='$(netsuite_account_info)'"$PROMPT"
 
-# Add visual separator to make the terminal more readable
-function ns-sep() {
-  echo -e "\n\033[1;34m==================================\033[0m"
-  echo -e "\033[1;34m NetSuite Development Environment \033[0m"
-  echo -e "\033[1;34m==================================\033[0m\n"
+# Terminal background image
+# ------------------------
+# Function to set a random terminal background image
+set_terminal_background() {
+  # Only run this in iTerm2 on macOS
+  if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
+    # Directory for background images
+    local bg_dir="$HOME/.terminal_backgrounds"
+    
+    # Create directory if it doesn't exist
+    if [[ ! -d "$bg_dir" ]]; then
+      mkdir -p "$bg_dir"
+      
+      # Download some default free images if the directory is empty
+      if command -v curl &> /dev/null; then
+        echo "Downloading terminal background images..."
+        local image_urls=(
+          "https://images.unsplash.com/photo-1507187632231-5beb21a654a2?w=1200&q=80" # Dark coding
+          "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=1200&q=80" # Code on screen
+          "https://images.unsplash.com/photo-1542831371-29b0f74f9713?w=1200&q=80" # Code on laptop
+          "https://images.unsplash.com/photo-1487058792275-0ad4aaf24ca7?w=1200&q=80" # Dark minimal
+          "https://images.unsplash.com/photo-1484417894907-623942c8ee29?w=1200&q=80" # Workspace
+        )
+        
+        for i in {1..5}; do
+          curl -s "${image_urls[$i-1]}" -o "$bg_dir/bg_$i.jpg"
+        done
+        echo "Background images downloaded to $bg_dir"
+      else
+        echo "Install curl to download background images"
+        return 1
+      fi
+    fi
+    
+    # Count images in the directory
+    local img_count=$(ls -1 "$bg_dir" | wc -l | tr -d ' ')
+    
+    if [[ $img_count -gt 0 ]]; then
+      # Select a random image
+      local random_num=$((1 + RANDOM % img_count))
+      local img_file=$(ls -1 "$bg_dir" | sed -n "${random_num}p")
+      
+      if [[ -n "$img_file" ]]; then
+        # Set the background image using iTerm2's proprietary sequence
+        local img_path="$bg_dir/$img_file"
+        # Set with 20% opacity for readability
+        printf "\033]1337;SetBackgroundImageFile=%s;Opacity=0.2\007" "$(echo -n "$img_path" | base64)"
+        echo "Terminal background set to $img_file"
+      fi
+    fi
+  else
+    # For non-iTerm terminals, add a hint about how to enable this feature
+    echo "Terminal background images require iTerm2 on macOS."
+    echo "More info: https://iterm2.com/documentation-images.html"
+  fi
 }
 
-# Run separator on new terminal
-ns-sep
+# Add command to refresh background manually
+alias ns-background="set_terminal_background"
+
+# Attempt to set background (will only work on supported terminals)
+set_terminal_background >/dev/null 2>&1
 
 # Daily Quote Function
 # ----------------
 # Fetches a random quote from quotable.io API
 get_daily_quote() {
   if command -v curl &> /dev/null; then
-    local quote_data=$(curl -s "https://api.quotable.io/random" 2>/dev/null)
+    local quote_data=$(curl -s "https://api.quotable.io/random" --connect-timeout 5 2>/dev/null)
     
-    if [[ -n "$quote_data" ]]; then
+    if [[ -n "$quote_data" && $(echo "$quote_data" | grep -c "content") -gt 0 ]]; then
       local quote=$(echo "$quote_data" | grep -o '"content":"[^"]*' | cut -d'"' -f4)
       local author=$(echo "$quote_data" | grep -o '"author":"[^"]*' | cut -d'"' -f4)
       
       if [[ -n "$quote" && -n "$author" ]]; then
         echo -e "\033[1;33m\"$quote\"\033[0m"
         echo -e "\033[1;36m— $author\033[0m"
-      else
-        echo "🔖 Wisdom loading... connection issue with quote service."
+        return 0
       fi
-    else
-      echo "🔖 Wisdom loading... connection issue with quote service."
     fi
+    
+    # Fallback quotes if API fails
+    local fallback_quotes=(
+      "\"The best way to predict the future is to create it.\"|Abraham Lincoln"
+      "\"Quality is not an act, it is a habit.\"|Aristotle"
+      "\"The secret of getting ahead is getting started.\"|Mark Twain"
+      "\"Success is not final, failure is not fatal: It is the courage to continue that counts.\"|Winston Churchill"
+      "\"Code is like humor. When you have to explain it, it's bad.\"|Cory House"
+      "\"NetSuite developers don't make bugs, they make undocumented features.\"|Anonymous"
+      "\"First, solve the problem. Then, write the code.\"|John Johnson"
+    )
+    
+    local random_quote=${fallback_quotes[$RANDOM % ${#fallback_quotes[@]}]}
+    local quote=$(echo "$random_quote" | cut -d'|' -f1)
+    local author=$(echo "$random_quote" | cut -d'|' -f2)
+    
+    echo -e "\033[1;33m$quote\033[0m"
+    echo -e "\033[1;36m— $author\033[0m"
   else
     echo "📚 Install curl to enable daily quotes feature."
   fi
@@ -294,9 +367,12 @@ daily_quote_cache() {
   fi
 }
 
-# Welcome message with daily quote
-echo -e "\n🚀 \033[1;32mNetSuite Development Environment Loaded\033[0m"
-echo -e "Type 'ns-api-help' or 'ns-record-help' for quick references\n"
-echo -e "\033[1;35m📜 Your daily inspiration:\033[0m"
-daily_quote_cache
-echo -e "\n"
+# Add visual separator to make the terminal more readable
+function ns-sep() {
+  echo -e "\n\033[1;34m==================================\033[0m"
+  echo -e "\033[1;34m NetSuite Development Environment \033[0m"
+  echo -e "\033[1;34m==================================\033[0m\n"
+}
+
+# Run separator on new terminal
+ns-sep
